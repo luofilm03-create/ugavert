@@ -255,16 +255,6 @@ function LiveChat({ topic }: { topic: Topic }) {
 
   type ChatMsg = { id: number; user: string; grad: string; text: string; ts: number };
 
-  const seed = useRef<ChatMsg[]>(() => {
-    return pool.slice(0, 6).map((text, i) => ({
-      id: i,
-      user: users[i % users.length],
-      grad: grads[i % grads.length],
-      text,
-      ts: Date.now() - (6 - i) * 18000,
-    }));
-  }).current as unknown as ChatMsg[];
-
   const [messages, setMessages] = useState<ChatMsg[]>(
     pool.slice(0, 6).map((text, i) => ({
       id: i, user: users[i % users.length], grad: grads[i % grads.length],
@@ -288,7 +278,6 @@ function LiveChat({ topic }: { topic: Topic }) {
   }, [topic]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-  void seed;
 
   const sendMsg = () => {
     if (!input.trim()) return;
