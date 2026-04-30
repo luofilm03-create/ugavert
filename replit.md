@@ -25,3 +25,9 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## Artifacts
+
+- `artifacts/course-platform/` — UGAVERT, an AI / Crypto / Investment / Banking discussion hub. React + Vite + wouter + Tailwind v4 + Firebase (Firestore + Realtime DB) for live chat, comments, and forum data. Imported from Vercel/v0.
+- `artifacts/api-server/` — shared Express API server (currently only health route).
+- `artifacts/mockup-sandbox/` — design mockup sandbox.
