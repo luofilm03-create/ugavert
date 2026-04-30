@@ -1,489 +1,659 @@
-import { useState } from "react";
-import drumImage from "@assets/9946127551a4804eff6e171a867a6ff8_1777541378461.jpg";
+import { useState, useEffect, useRef, useCallback } from "react";
 
-const tags = ["#bateria", "#percussão", "#barulho", "#tambores", "#rock", "#banda"];
+/* ─────────────────────────────────────────────────────────
+   TOPIC DATA
+───────────────────────────────────────────────────────── */
+const TOPICS = ["AI", "Crypto", "Investment", "Banking"] as const;
+type Topic = (typeof TOPICS)[number];
 
-const curriculum = [
-  {
-    id: 1,
-    title: "1. Rudimentos",
-    duration: "1h16",
-    expanded: true,
-    desc: "No primeiro módulo desse curso, estudaremos os rudimentos, que são pequenas combinações de sons padronizadas, que formam padrões",
-    lessons: [
-      { id: 1, title: "Ritmo", duration: "0:16", completed: true, current: false },
-      { id: 2, title: "Single stroke roll e five stroke roll", duration: "0:30", completed: true, current: false },
-      { id: 3, title: "Rulos, diddles, flams e drags", duration: "0:15", completed: false, current: true },
-      { id: 4, title: "Introdução sobre viradas (drum fills)", duration: "0:15", completed: false, current: false },
+const TOPIC_CONFIG: Record<Topic, {
+  color: string; badge: string; icon: string;
+  questions: string[];
+  adLabels: string[];
+  subtags: string[];
+}> = {
+  AI: {
+    color: "#7c3aed", badge: "badge-ai", icon: "🤖",
+    subtags: ["#VibeCode", "#LLMs", "#ChatGPT", "#Gemini", "#Cursor", "#Claude", "#Design"],
+    questions: [
+      "WHICH AI PLATFORM IS BEST FOR VIBE CODING?",
+      "BEST AI FOR WEBSITE & APP DESIGNING?",
+      "WHICH AI IMAGE GENERATOR IS MOST POWERFUL?",
+      "CHATGPT VS CLAUDE VS GEMINI — WHO WINS?",
+      "CAN AI REPLACE DEVELOPERS IN 2025?",
+      "BEST AI CODING ASSISTANT RIGHT NOW?",
+      "WHICH AI WRITES THE CLEANEST CODE?",
     ],
+    adLabels: ["AI Tools & Platforms", "Code with AI", "AI Productivity Suite", "Smart AI Assistant"],
   },
-  {
-    id: 2,
-    title: "2. Drum Fills",
-    duration: "2h10",
-    expanded: false,
-    desc: "As viradas de bateria têm um papel fundamental para alcançar uma boa musicalidade. Elas são as pontes ou transições e são marcadas",
-    lessons: [
-      { id: 5, title: "Metrônomo a tempo", duration: "0:10", completed: false, current: false },
-      { id: 6, title: "Técnica com uso do bumbo", duration: "0:30", completed: false, current: false },
-      { id: 7, title: "3 compassos com virada simples", duration: "0:45", completed: false, current: false },
-      { id: 8, title: "Conheça a virada na virada", duration: "0:45", completed: false, current: false },
+  Crypto: {
+    color: "#d97706", badge: "badge-crypto", icon: "₿",
+    subtags: ["#Bitcoin", "#Ethereum", "#DeFi", "#NFTs", "#Altcoins", "#Staking", "#Web3"],
+    questions: [
+      "WHICH CRYPTOCURRENCY WILL DOMINATE IN 2025?",
+      "IS BITCOIN STILL THE KING OF CRYPTO?",
+      "DEFI OR CEFI — WHICH IS SAFER FOR INVESTMENT?",
+      "BEST CRYPTO EXCHANGE PLATFORM RIGHT NOW?",
+      "SHOULD YOU STAKE YOUR CRYPTO HOLDINGS?",
+      "ETHEREUM VS SOLANA — WHICH HAS MORE FUTURE?",
+      "HOW TO IDENTIFY THE NEXT 100X ALTCOIN?",
     ],
+    adLabels: ["Top Crypto Exchange", "Secure Your Bitcoin", "DeFi Yield Platform", "Crypto Portfolio Tracker"],
   },
-  {
-    id: 3,
-    title: "3. Pedais",
-    duration: "3h56",
-    expanded: false,
-    desc: "Chegou a hora de aprendermos mais sobre pedais, que serão utilizados para você tocar em ritmo acelerado ou compor subdivisões mais complexas",
-    lessons: [
-      { id: 9,  title: "Posicionamento correto dos pedais", duration: "0:16", completed: false, current: false },
-      { id: 10, title: "Bumbo e chimbal (HiHat)",           duration: "0:40", completed: false, current: false },
-      { id: 11, title: "Pedais duplos",                     duration: "0:15", completed: false, current: false },
-      { id: 12, title: "Posicionamento correto do kit",     duration: "0:15", completed: false, current: false },
-      { id: 13, title: "Técnica do Heel Up e Heel Down",    duration: "0:30", completed: false, current: false },
-      { id: 14, title: "Exemplos: John Bonham",             duration: "0:15", completed: false, current: false },
-      { id: 15, title: "Open HiHat e Closed HiHat",        duration: "0:15", completed: false, current: false },
-      { id: 16, title: "Exercícios, pt.1",                  duration: "0:15", completed: false, current: false },
-      { id: 17, title: "Exercícios, pt.2",                  duration: "0:15", completed: false, current: false },
+  Investment: {
+    color: "#16a34a", badge: "badge-invest", icon: "📈",
+    subtags: ["#Stocks", "#ETFs", "#RealEstate", "#Dividends", "#Passive", "#Portfolio", "#Options"],
+    questions: [
+      "STOCKS VS CRYPTO — WHERE TO PUT YOUR MONEY?",
+      "BEST INVESTMENT STRATEGY FOR BEGINNERS IN 2025?",
+      "IS REAL ESTATE STILL WORTH IT THIS YEAR?",
+      "INDEX FUNDS VS INDIVIDUAL STOCKS — WHICH WINS?",
+      "HOW TO BUILD PASSIVE INCOME THAT LASTS?",
+      "WHAT IS THE SAFEST HIGH-YIELD INVESTMENT?",
+      "DIVIDEND STOCKS OR GROWTH STOCKS — YOUR PICK?",
     ],
+    adLabels: ["Smart Investment App", "Stock Market Signals", "Real Estate Platform", "Portfolio Manager Pro"],
   },
-];
+  Banking: {
+    color: "#1d4ed8", badge: "badge-bank", icon: "🏦",
+    subtags: ["#NeoBank", "#Savings", "#Loans", "#FinTech", "#BNPL", "#CreditCard", "#Swift"],
+    questions: [
+      "BEST DIGITAL BANK IN 2025 — YOUR VOTE?",
+      "TRADITIONAL BANK VS NEOBANK — WHICH IS BETTER?",
+      "HOW TO MAXIMIZE YOUR SAVINGS INTEREST RATE?",
+      "BEST CREDIT CARD FOR CASHBACK REWARDS?",
+      "IS YOUR MONEY ACTUALLY SAFE IN A DIGITAL BANK?",
+      "WHICH FINTECH IS DISRUPTING BANKING THE MOST?",
+      "BNPL VS CREDIT CARD — WHICH SHOULD YOU USE?",
+    ],
+    adLabels: ["Open a Digital Account", "Zero-Fee Banking", "High-Yield Savings", "Best Credit Card Offer"],
+  },
+};
 
-const comments = [
-  {
-    id: 1,
-    name: "Dave Grohl",
-    time: "2 dias atrás",
-    text: "Meu Deus do céu, você é demais Taylor Hawkins, você é demais!!!",
-    likes: 1,
-    bg: "linear-gradient(135deg,#f0c060,#e8a030)",
-    initials: "DG",
-  },
-  {
-    id: 2,
-    name: "Kurt Cobain",
-    time: "4 dias atrás",
-    text: "Muito boa sua aula, parabéns!! Eu fiquei com um pouco de dúvida sobre a questão do grip das baquetas, tipo, parece que um pouco de movimentação diferente do esperado ou a força que eu coloco na pegada eu já posso gerar um som diferente no meu kit, sabe?",
-    likes: 0,
-    bg: "linear-gradient(135deg,#a8d880,#70b840)",
-    initials: "KC",
-  },
-  {
-    id: 3,
-    name: "Leo Gamalho",
-    time: "8 dias atrás",
-    text: "Cara, eu que sou jogador de futebol e sempre fui muito mais do esporte do que da música, desde que conheci esse curso consegui tocar várias músicas e me divertir demais!! Acho que não tem nada mais relaxante e gostoso do que tocar um som e escutar que eu to conseguindo desenvolver algo gostoso de ouvir... Parabéns mano, muito bom",
-    likes: 0,
-    bg: "linear-gradient(135deg,#f8b860,#f09030)",
-    initials: "LG",
-  },
-];
+/* ─────────────────────────────────────────────────────────
+   MOCK COMMENTS (per topic, unique)
+───────────────────────────────────────────────────────── */
+const MOCK_COMMENTS: Record<Topic, Array<{ id: number; user: string; initials: string; grad: string; time: string; text: string; votes: number }>> = {
+  AI: [
+    { id: 1, user: "Alex M.", initials: "AM", grad: "linear-gradient(135deg,#8b5cf6,#6d28d9)", time: "2 min ago", text: "Cursor AI has literally changed how I build apps. The vibe coding workflow is insane — I shipped a SaaS in a weekend!", votes: 47 },
+    { id: 2, user: "Sara K.", initials: "SK", grad: "linear-gradient(135deg,#ec4899,#be185d)", time: "8 min ago", text: "Claude 3.5 Sonnet is still my go-to for design work. It understands context way better than GPT for UI generation.", votes: 31 },
+    { id: 3, user: "Dev Pro", initials: "DP", grad: "linear-gradient(135deg,#06b6d4,#0e7490)", time: "15 min ago", text: "Gemini 1.5 Flash is underrated for quick iterations. Free tier is generous too.", votes: 19 },
+    { id: 4, user: "Jamie T.", initials: "JT", grad: "linear-gradient(135deg,#f59e0b,#d97706)", time: "22 min ago", text: "Copilot + Cursor combo is unmatched for coding. Nothing else comes close for real-world dev work.", votes: 24 },
+  ],
+  Crypto: [
+    { id: 1, user: "Satoshi_Fan", initials: "SF", grad: "linear-gradient(135deg,#f59e0b,#d97706)", time: "1 min ago", text: "BTC is down 8% today but long-term holders aren't worried. This is just normal volatility. HODL.", votes: 62 },
+    { id: 2, user: "ETH_Maxi", initials: "EM", grad: "linear-gradient(135deg,#6366f1,#4338ca)", time: "5 min ago", text: "Ethereum's staking yield is compelling. 4-5% APY while holding an asset with real utility — beats most savings accounts.", votes: 38 },
+    { id: 3, user: "DeFi_Dave", initials: "DD", grad: "linear-gradient(135deg,#10b981,#065f46)", time: "11 min ago", text: "Solana is eating Ethereum's lunch on transaction fees. The ecosystem is growing fast.", votes: 27 },
+    { id: 4, user: "CryptoCarla", initials: "CC", grad: "linear-gradient(135deg,#ef4444,#b91c1c)", time: "18 min ago", text: "Never put more than 5% of your portfolio in any single altcoin. Diversification is still king.", votes: 45 },
+  ],
+  Investment: [
+    { id: 1, user: "Warren B.", initials: "WB", grad: "linear-gradient(135deg,#16a34a,#14532d)", time: "3 min ago", text: "VOO and chill. S&P 500 index funds beat 90% of active managers over 10 years. Stop overcomplicating it.", votes: 88 },
+    { id: 2, user: "RealEstate_R", initials: "RR", grad: "linear-gradient(135deg,#0891b2,#164e63)", time: "9 min ago", text: "Real estate cash flow is still unbeatable if you buy in the right market. Leverage amplifies everything.", votes: 42 },
+    { id: 3, user: "Dividend_D", initials: "DD", grad: "linear-gradient(135deg,#d97706,#92400e)", time: "14 min ago", text: "Dividend reinvestment (DRIP) over 20 years is genuinely life-changing. Start early, let compounding do its thing.", votes: 55 },
+    { id: 4, user: "Options_O", initials: "OO", grad: "linear-gradient(135deg,#7c3aed,#4c1d95)", time: "25 min ago", text: "Covered calls on my ETF holdings generate an extra 1-2% monthly. Low risk, consistent income.", votes: 29 },
+  ],
+  Banking: [
+    { id: 1, user: "FinTech_F", initials: "FF", grad: "linear-gradient(135deg,#2563eb,#1e40af)", time: "4 min ago", text: "Revolut Premium is worth every penny if you travel internationally. Zero FX fees alone save me hundreds a year.", votes: 53 },
+    { id: 2, user: "SavingsKing", initials: "SK", grad: "linear-gradient(135deg,#16a34a,#14532d)", time: "10 min ago", text: "Marcus by Goldman Sachs still offers one of the best HYSA rates with no fees. Been using it 3 years.", votes: 36 },
+    { id: 3, user: "CashBack_C", initials: "CC", grad: "linear-gradient(135deg,#dc2626,#991b1b)", time: "17 min ago", text: "Chase Sapphire Reserve + Freedom Flex combo is unbeatable for travel rewards + everyday cashback.", votes: 41 },
+    { id: 4, user: "NoFees_N", initials: "NN", grad: "linear-gradient(135deg,#0891b2,#0e4060)", time: "28 min ago", text: "Traditional banks charging $15/month maintenance fees in 2025 is criminal. Switch to a neobank already.", votes: 67 },
+  ],
+};
 
-function StarRating({ rating }: { rating: number }) {
+/* ─────────────────────────────────────────────────────────
+   MOCK LIVE CHAT MESSAGES
+───────────────────────────────────────────────────────── */
+const LIVE_CHAT_POOL: Record<Topic, string[]> = {
+  AI: [
+    "Cursor AI is 🔥 right now",
+    "Anyone tried Windsurf IDE?",
+    "Claude is better for long context imo",
+    "GPT-4o is still my daily driver",
+    "Gemini Flash is surprisingly fast",
+    "Replit Agent just built me a full app 😱",
+    "Claude for writing, GPT for code",
+    "Perplexity > Google for research now",
+    "Anyone tried Devin?",
+    "AI will replace junior devs by 2026 fr",
+  ],
+  Crypto: [
+    "BTC $100k end of year? 🚀",
+    "ETH staking is passive income goals",
+    "SOL is so undervalued rn",
+    "DYOR always, never trust CT blindly",
+    "DCA every week, never stop",
+    "This dip is a buying opportunity",
+    "Binance or Coinbase for beginners?",
+    "Cold wallet or you don't own your crypto",
+    "BRC-20 tokens are making moves",
+    "LN payments are becoming mainstream",
+  ],
+  Investment: [
+    "VTSAX and chill forever 🛋️",
+    "Real estate beats everything long term",
+    "Anyone doing covered calls here?",
+    "Roth IRA maxed for 2025 ✅",
+    "Dollar cost average, don't time the market",
+    "SCHD dividend growth is consistent",
+    "3-fund portfolio is underrated",
+    "Emergency fund first, invest second",
+    "Which brokerage do you use?",
+    "Index funds beat hedge funds 90% of the time",
+  ],
+  Banking: [
+    "Revolut Premium is worth it 💳",
+    "Marcus HYSA hitting 4.5% APY",
+    "Traditional banks are dinosaurs",
+    "Chase Sapphire points are 🔑",
+    "Wise for international transfers!",
+    "Is Chime reliable long term?",
+    "FDIC insured = sleep well at night",
+    "No fee banking should be standard",
+    "Credit union > big bank always",
+    "Apple Card is genuinely good for cashback",
+  ],
+};
+
+/* ─────────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────────── */
+function getTopicFromStorage(): Topic {
+  try {
+    const stored = localStorage.getItem("finai_topic_data");
+    if (stored) {
+      const { topic, timestamp } = JSON.parse(stored) as { topic: Topic; timestamp: number };
+      const elapsed = Date.now() - timestamp;
+      if (elapsed < 12 * 60 * 60 * 1000) return topic;
+    }
+  } catch { /* ignore */ }
+  const topic = TOPICS[Math.floor(Date.now() / (12 * 60 * 60 * 1000)) % TOPICS.length];
+  localStorage.setItem("finai_topic_data", JSON.stringify({ topic, timestamp: Date.now() }));
+  return topic;
+}
+
+function getQuestionFromStorage(topic: Topic): string {
+  try {
+    const stored = localStorage.getItem(`finai_q_${topic}`);
+    if (stored) {
+      const { question, timestamp } = JSON.parse(stored) as { question: string; timestamp: number };
+      if (Date.now() - timestamp < 12 * 60 * 60 * 1000) return question;
+    }
+  } catch { /* ignore */ }
+  const questions = TOPIC_CONFIG[topic].questions;
+  const q = questions[Math.floor(Date.now() / (12 * 60 * 60 * 1000)) % questions.length];
+  localStorage.setItem(`finai_q_${topic}`, JSON.stringify({ question: q, timestamp: Date.now() }));
+  return q;
+}
+
+/* ─────────────────────────────────────────────────────────
+   AD SLOT COMPONENT
+───────────────────────────────────────────────────────── */
+function AdSlot({ slotLabel, index }: { slotLabel: string; index: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Attempt to push AdSense ad
+    try {
+      const w = window as unknown as { adsbygoogle?: unknown[] };
+      if (w.adsbygoogle) {
+        (w.adsbygoogle = w.adsbygoogle || []).push({});
+      }
+    } catch { /* ignore if adsbygoogle not ready */ }
+  }, [index]);
+
   return (
-    <span className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((s) => (
-        <svg key={s} className={s <= rating ? "star-filled" : "star-empty"} width="14" height="14" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-        </svg>
-      ))}
-    </span>
+    <div ref={ref} className="w-full flex flex-col items-center justify-center" style={{ minHeight: 260 }}>
+      {/* Real AdSense unit — will load if approved */}
+      <ins
+        className="adsbygoogle"
+        style={{ display: "block", width: "100%", minHeight: 250 }}
+        data-ad-client="ca-pub-4036391133460180"
+        data-ad-slot="auto"
+        data-ad-format="auto"
+        data-full-width-responsive="true"
+      />
+      {/* Fallback visual shown while waiting for AdSense approval */}
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none"
+        style={{ zIndex: 0 }}
+      >
+        <div
+          className="px-6 py-3 rounded-xl text-sm font-semibold text-white shadow-md"
+          style={{ background: "linear-gradient(135deg,rgba(210,162,28,0.85),rgba(160,115,10,0.90))" }}
+        >
+          📢 Advertisement
+        </div>
+        <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: "rgba(110,85,20,0.5)" }}>
+          {slotLabel} — Ad Slot {index + 1}
+        </p>
+        <p className="text-xs mt-1" style={{ color: "rgba(100,75,15,0.38)" }}>
+          Powered by Google AdSense · ca-pub-4036391133460180
+        </p>
+      </div>
+    </div>
   );
 }
 
-function CheckIcon({ filled, current }: { filled: boolean; current: boolean }) {
-  if (filled) {
-    return (
-      <span className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#d4a820,#e8c040)" }}>
-        <svg width="10" height="10" fill="white" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-        </svg>
-      </span>
-    );
-  }
-  if (current) {
-    return (
-      <span className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0" style={{ borderColor: "#c89818", background: "rgba(210,170,30,0.12)" }}>
-        <span className="w-2 h-2 rounded-full" style={{ background: "#c89818" }} />
-      </span>
-    );
-  }
+/* ─────────────────────────────────────────────────────────
+   LIVE CHAT
+───────────────────────────────────────────────────────── */
+function LiveChat({ topic }: { topic: Topic }) {
+  const pool = LIVE_CHAT_POOL[topic];
+  const users = ["Alex_M", "Sara_K", "DevPro", "Jamie_T", "Crypto_C", "FinGuru", "WenMoon", "TechLead", "PedroCR", "K8_Dev"];
+  const grads = [
+    "linear-gradient(135deg,#8b5cf6,#6d28d9)",
+    "linear-gradient(135deg,#ec4899,#be185d)",
+    "linear-gradient(135deg,#06b6d4,#0e7490)",
+    "linear-gradient(135deg,#f59e0b,#d97706)",
+    "linear-gradient(135deg,#10b981,#065f46)",
+    "linear-gradient(135deg,#2563eb,#1e40af)",
+    "linear-gradient(135deg,#ef4444,#b91c1c)",
+    "linear-gradient(135deg,#d97706,#92400e)",
+    "linear-gradient(135deg,#7c3aed,#4c1d95)",
+    "linear-gradient(135deg,#16a34a,#14532d)",
+  ];
+
+  type ChatMsg = { id: number; user: string; grad: string; text: string; ts: number };
+
+  const seed = useRef<ChatMsg[]>(() => {
+    return pool.slice(0, 6).map((text, i) => ({
+      id: i,
+      user: users[i % users.length],
+      grad: grads[i % grads.length],
+      text,
+      ts: Date.now() - (6 - i) * 18000,
+    }));
+  }).current as unknown as ChatMsg[];
+
+  const [messages, setMessages] = useState<ChatMsg[]>(
+    pool.slice(0, 6).map((text, i) => ({
+      id: i, user: users[i % users.length], grad: grads[i % grads.length],
+      text, ts: Date.now() - (6 - i) * 18000,
+    }))
+  );
+  const [input, setInput] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const counterRef = useRef(100);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const ri = Math.floor(Math.random() * pool.length);
+      const ui = Math.floor(Math.random() * users.length);
+      setMessages((prev) => {
+        const next = [...prev, { id: counterRef.current++, user: users[ui], grad: grads[ui], text: pool[ri], ts: Date.now() }];
+        return next.slice(-30);
+      });
+    }, 5000 + Math.random() * 4000);
+    return () => clearInterval(timer);
+  }, [topic]);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  void seed;
+
+  const sendMsg = () => {
+    if (!input.trim()) return;
+    setMessages((prev) => [...prev, { id: counterRef.current++, user: "You", grad: "linear-gradient(135deg,#c8960e,#8a6205)", text: input.trim(), ts: Date.now() }].slice(-30));
+    setInput("");
+  };
+
+  const fmt = (ts: number) => {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 10) return "just now";
+    if (s < 60) return `${s}s ago`;
+    return `${Math.floor(s / 60)}m ago`;
+  };
+
   return (
-    <span className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0" style={{ borderColor: "rgba(180,150,60,0.35)" }}>
-      <svg width="9" height="9" fill="none" viewBox="0 0 20 20" stroke="rgba(140,110,40,0.5)" strokeWidth="2">
-        <polygon points="5,3 19,10 5,17" />
-      </svg>
-    </span>
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-3 px-4 pt-4">
+        <div className="live-dot" />
+        <span className="text-sm font-bold text-stone-700">Live Chat</span>
+        <span className="ml-auto text-xs text-stone-400">{messages.length} online</span>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto scroll-custom px-3 flex flex-col gap-2 pb-2">
+        {messages.map((m) => (
+          <div key={m.id} className="glass-chat-msg">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ background: m.grad }} />
+              <span className="font-semibold text-stone-700 text-[0.72rem]">{m.user}</span>
+              <span className="text-stone-400 text-[0.65rem] ml-auto">{fmt(m.ts)}</span>
+            </div>
+            <p className="text-stone-600 leading-snug">{m.text}</p>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="px-3 pb-4 pt-2 flex gap-2">
+        <input
+          className="glass-input flex-1 rounded-full text-xs px-3 py-2"
+          placeholder="Say something..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && sendMsg()}
+        />
+        <button
+          onClick={sendMsg}
+          className="glass-btn-gold rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0 text-white"
+        >
+          <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22,2 15,22 11,13 2,9" />
+          </svg>
+        </button>
+      </div>
+    </div>
   );
 }
 
+/* ─────────────────────────────────────────────────────────
+   MAIN PAGE
+───────────────────────────────────────────────────────── */
 export default function CoursePage() {
-  const [sections, setSections] = useState(curriculum);
-  const [activeTab, setActiveTab] = useState("Comentários");
-  const [activeTag, setActiveTag] = useState("#bateria");
-  const [commentText, setCommentText] = useState("");
-  const [playing, setPlaying] = useState(false);
+  const [topic, setTopic] = useState<Topic>(getTopicFromStorage);
+  const [question, setQuestion] = useState(() => getQuestionFromStorage(getTopicFromStorage()));
+  const [activeTag, setActiveTag] = useState<string>("");
+  const [adIndex, setAdIndex] = useState(0);
+  const [adTimer, setAdTimer] = useState(0); // 0-100
+  const AD_DURATION = 30; // seconds per ad
+  const [forumTab, setForumTab] = useState<"Discussion" | "Forum" | "Top Picks">("Discussion");
+  const [comments, setComments] = useState(MOCK_COMMENTS[topic]);
+  const [commentInput, setCommentInput] = useState("");
+  const [voted, setVoted] = useState<Record<number, boolean>>({});
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const config = TOPIC_CONFIG[topic];
+  const adLabels = config.adLabels;
 
-  const toggleSection = (id: number) =>
-    setSections((prev) => prev.map((s) => (s.id === id ? { ...s, expanded: !s.expanded } : s)));
+  // Auto-advance ads
+  useEffect(() => {
+    setAdTimer(0);
+    timerRef.current && clearInterval(timerRef.current);
+    let elapsed = 0;
+    timerRef.current = setInterval(() => {
+      elapsed += 1;
+      setAdTimer(Math.min((elapsed / AD_DURATION) * 100, 100));
+      if (elapsed >= AD_DURATION) {
+        elapsed = 0;
+        setAdIndex((i) => (i + 1) % adLabels.length);
+        setAdTimer(0);
+      }
+    }, 1000);
+    return () => { timerRef.current && clearInterval(timerRef.current); };
+  }, [adIndex, adLabels.length, topic]);
 
-  const tabs = ["Transcrição", "Comentários", "Anexos", "Dúvidas", "Relacionados"];
+  // Switch topic
+  const switchTopic = (t: Topic) => {
+    setTopic(t);
+    setQuestion(getQuestionFromStorage(t));
+    setActiveTag("");
+    setComments(MOCK_COMMENTS[t]);
+    setAdIndex(0);
+    setAdTimer(0);
+    setVoted({});
+    localStorage.setItem("finai_topic_data", JSON.stringify({ topic: t, timestamp: Date.now() }));
+  };
+
+  const prevAd = () => setAdIndex((i) => (i - 1 + adLabels.length) % adLabels.length);
+  const nextAd = () => setAdIndex((i) => (i + 1) % adLabels.length);
+
+  const postComment = () => {
+    if (!commentInput.trim()) return;
+    setComments((prev) => [
+      {
+        id: Date.now(), user: "You", initials: "YO",
+        grad: "linear-gradient(135deg,#c8960e,#8a6205)",
+        time: "just now", text: commentInput.trim(), votes: 0,
+      },
+      ...prev,
+    ]);
+    setCommentInput("");
+  };
+
+  const toggleVote = useCallback((id: number) => {
+    setVoted((prev) => ({ ...prev, [id]: !prev[id] }));
+    setComments((prev) => prev.map((c) => c.id === id ? { ...c, votes: c.votes + (voted[id] ? -1 : 1) } : c));
+  }, [voted]);
+
+  // 12-hr countdown display
+  const [nextChange, setNextChange] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      try {
+        const stored = localStorage.getItem("finai_topic_data");
+        if (stored) {
+          const { timestamp } = JSON.parse(stored) as { timestamp: number };
+          const remaining = 12 * 3600 * 1000 - (Date.now() - timestamp);
+          if (remaining > 0) {
+            const h = Math.floor(remaining / 3600000);
+            const m = Math.floor((remaining % 3600000) / 60000);
+            setNextChange(`${h}h ${m}m`);
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    tick();
+    const t = setInterval(tick, 60000);
+    return () => clearInterval(t);
+  }, [topic]);
 
   return (
     <div className="relative min-h-screen">
       {/* Ambient orbs */}
-      <div className="warm-orb-1" />
-      <div className="warm-orb-2" />
-      <div className="warm-orb-3" />
+      <div className="warm-orb warm-orb-1" />
+      <div className="warm-orb warm-orb-2" />
+      <div className="warm-orb warm-orb-3" />
 
-      {/* ── NAVBAR ── */}
+      {/* ─── NAVBAR ─── */}
       <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-screen-2xl mx-auto px-6 h-14 flex items-center gap-6">
+        <div className="max-w-screen-xl mx-auto px-5 h-14 flex items-center gap-2">
           {/* Logo */}
-          <div
-            className="flex items-center justify-center w-8 h-8 rounded-lg mr-2 flex-shrink-0"
-            style={{ background: "linear-gradient(135deg,#d4a820,#b88010)" }}
-          >
-            <svg width="16" height="16" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
+          <div className="flex items-center gap-2 mr-4 flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-black" style={{ background: "linear-gradient(135deg,#d4a018,#8a6205)" }}>
+              F
+            </div>
+            <span className="font-bold text-base text-stone-800 hidden sm:block">FinAI Hub</span>
           </div>
 
-          {/* Links */}
-          {["Home", "Cursos", "Ferramentas", "Progresso", "Certificados"].map((link) => (
-            <button
-              key={link}
-              className={`text-sm font-medium transition-colors px-1 pb-0.5 ${
-                link === "Cursos"
-                  ? "text-amber-800 border-b-2 border-amber-500"
-                  : "text-stone-500 hover:text-stone-700"
-              }`}
-            >
-              {link}
-            </button>
-          ))}
+          {/* Topic nav */}
+          <div className="flex items-center gap-1">
+            {TOPICS.map((t) => (
+              <button key={t} className={`glass-btn-nav flex items-center gap-1.5 ${topic === t ? "active" : ""}`} onClick={() => switchTopic(t)}>
+                <span>{TOPIC_CONFIG[t].icon}</span> {t}
+              </button>
+            ))}
+          </div>
 
+          {/* Right side */}
           <div className="ml-auto flex items-center gap-2.5">
-            {/* Search */}
+            <div className="hidden md:flex items-center gap-1.5 text-xs text-stone-400">
+              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12,6 12,12 16,14" /></svg>
+              Topic changes in <strong className="text-amber-700">{nextChange}</strong>
+            </div>
             <div className="relative">
-              <input
-                className="glass-input rounded-full text-sm px-4 py-1.5 pr-9 w-60"
-                placeholder="Digite aqui para realizar uma pesquisa"
-              />
-              <svg className="absolute right-3 top-1/2 -translate-y-1/2" width="14" height="14" fill="none" stroke="rgba(140,110,40,0.5)" strokeWidth="2" viewBox="0 0 24 24">
+              <input className="glass-input rounded-full text-xs px-3 py-1.5 pr-8 w-44" placeholder="Search topics..." />
+              <svg className="absolute right-2.5 top-1/2 -translate-y-1/2" width="12" height="12" fill="none" stroke="rgba(130,100,25,0.45)" strokeWidth="2" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
               </svg>
             </div>
-
-            {/* Icon buttons */}
-            {[
-              <svg key="g" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" /></svg>,
-              <svg key="b" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
-            ].map((icon, i) => (
-              <button key={i} className="glass-btn w-8 h-8 rounded-lg flex items-center justify-center text-stone-400">
-                {icon}
-              </button>
-            ))}
-
-            {/* Avatar */}
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold border-2"
-              style={{ background: "linear-gradient(135deg,#e0a830,#c08010)", borderColor: "rgba(220,180,60,0.5)" }}
-            >
-              TH
+            <div className="w-7 h-7 rounded-full text-white text-xs font-bold flex items-center justify-center" style={{ background: "linear-gradient(135deg,#d4a018,#8a6205)" }}>
+              U
             </div>
           </div>
         </div>
       </nav>
 
-      {/* ── MAIN CONTENT ── */}
-      <div className="max-w-screen-2xl mx-auto px-6 py-5 relative z-10">
+      {/* ─── MAIN LAYOUT ─── */}
+      <div className="max-w-screen-xl mx-auto px-5 py-4 relative z-10">
 
-        {/* Back + tags row */}
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <button className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-700 transition-colors">
-            <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round">
-              <path d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Voltar
-          </button>
-          <div className="flex gap-2 flex-wrap">
-            {tags.map((tag) => (
-              <button key={tag} className={`glass-tag ${activeTag === tag ? "active" : ""}`} onClick={() => setActiveTag(tag)}>
-                {tag}
-              </button>
-            ))}
-          </div>
+        {/* Sub-tags row */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className={`badge ${config.badge}`}>{config.icon} {topic}</span>
+          {config.subtags.map((tag) => (
+            <button key={tag} className={`glass-tag ${activeTag === tag ? "active" : ""}`} onClick={() => setActiveTag(activeTag === tag ? "" : tag)}>
+              {tag}
+            </button>
+          ))}
         </div>
 
-        {/* Two-column layout */}
-        <div className="flex gap-5">
+        <div className="flex gap-4">
 
-          {/* ── LEFT COLUMN ── */}
+          {/* ─── LEFT: AD + QUESTION + FORUM ─── */}
           <div className="flex-1 min-w-0 flex flex-col gap-4">
 
-            {/* Video */}
+            {/* QUESTION BANNER */}
+            <div className="glass-question rounded-xl px-5 py-4 question-animate" key={question}>
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ background: "rgba(255,255,255,0.6)" }}>
+                  {config.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[0.65rem] font-bold uppercase tracking-widest mb-1" style={{ color: config.color }}>
+                    Hot Question · {topic}
+                  </p>
+                  <h2 className="text-base font-black text-stone-800 leading-snug">{question}</h2>
+                  <p className="text-xs text-stone-400 mt-1 flex items-center gap-1">
+                    <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12,6 12,12 16,14" /></svg>
+                    Refreshes in {nextChange} · Drop your answer below
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* AD AREA */}
             <div className="glass-card rounded-xl overflow-hidden">
-              <div className="video-container">
-                <img src={drumImage} alt="Drum lesson" />
-                <div className="play-overlay">
-                  <button
-                    className="w-16 h-16 rounded-full flex items-center justify-center transition-transform hover:scale-110"
-                    style={{
-                      background: "rgba(255,255,255,0.22)",
-                      backdropFilter: "blur(10px)",
-                      border: "2px solid rgba(255,255,255,0.5)",
-                    }}
-                    onClick={() => setPlaying(!playing)}
-                  >
-                    {playing
-                      ? <svg width="22" height="22" fill="white" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
-                      : <svg width="22" height="22" fill="white" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" /></svg>
-                    }
-                  </button>
+              {/* Ad header */}
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-amber-100/50">
+                <span className="text-xs font-semibold uppercase tracking-widest text-stone-400">Sponsored</span>
+                <div className="flex items-center gap-2">
+                  {adLabels.map((_, i) => (
+                    <button
+                      key={i}
+                      className="w-2 h-2 rounded-full transition-all"
+                      style={{ background: i === adIndex ? config.color : "rgba(180,150,60,0.25)" }}
+                      onClick={() => setAdIndex(i)}
+                    />
+                  ))}
                 </div>
+                <span className="text-xs text-stone-400">{adIndex + 1} / {adLabels.length}</span>
+              </div>
 
-                {/* Subtitle caption */}
-                <div className="absolute bottom-14 left-0 right-0 flex justify-center pointer-events-none">
-                  <span
-                    className="text-white text-sm px-3 py-1 rounded"
-                    style={{ background: "rgba(10,6,0,0.58)", backdropFilter: "blur(6px)" }}
-                  >
-                    É justamente isso que a gente vai ver hoje aqui
-                  </span>
-                </div>
+              {/* Auto-timer bar */}
+              <div className="h-[3px] w-full" style={{ background: "rgba(200,170,60,0.12)" }}>
+                <div className="ad-timer-bar" style={{ width: `${adTimer}%` }} />
+              </div>
 
-                {/* Controls bar */}
-                <div className="video-controls">
-                  <button className="text-white/90 hover:text-white" onClick={() => setPlaying(!playing)}>
-                    {playing
-                      ? <svg width="17" height="17" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
-                      : <svg width="17" height="17" fill="currentColor" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" /></svg>
-                    }
-                  </button>
-                  <button className="text-white/75 hover:text-white">
-                    <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M19 20L9 12l10-8v16zM5 4h2v16H5z" /></svg>
-                  </button>
-                  <button className="text-white/75 hover:text-white">
-                    <svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8V4zm14 0h-2v16h2z" /></svg>
-                  </button>
-                  <span className="text-white/75 text-xs">1:26 / 15:16</span>
-                  <div className="flex-1 h-1.5 rounded-full mx-1 cursor-pointer" style={{ background: "rgba(255,255,255,0.2)" }}>
-                    <div className="h-1.5 rounded-full" style={{ width: "9%", background: "linear-gradient(90deg,#e8c040,#d4a020)" }} />
-                  </div>
-                  <div className="flex gap-2 ml-auto">
-                    {[
-                      <svg key="m" width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" /></svg>,
-                      <svg key="v" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19 11,5" /><path d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" /></svg>,
-                      <svg key="f" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" /></svg>,
-                    ].map((ic, i) => (
-                      <button key={i} className="text-white/75 hover:text-white">{ic}</button>
-                    ))}
-                  </div>
+              {/* Ad slot */}
+              <div className="glass-ad-area mx-4 my-4 relative" style={{ minHeight: 280 }}>
+                <AdSlot slotLabel={adLabels[adIndex]} index={adIndex} />
+              </div>
+
+              {/* Prev / Next */}
+              <div className="flex items-center justify-between px-4 pb-4 gap-4">
+                <button
+                  className="glass-btn rounded-full flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+                  onClick={prevAd}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" strokeLinecap="round"><path d="M15 19l-7-7 7-7" /></svg>
+                  Previous
+                </button>
+                <div className="flex-1 text-center">
+                  <p className="text-xs font-semibold text-stone-600">{adLabels[adIndex]}</p>
+                  <p className="text-[0.65rem] text-stone-400">Auto-advances in {Math.ceil(AD_DURATION - (adTimer / 100) * AD_DURATION)}s</p>
                 </div>
+                <button
+                  className="glass-btn-gold rounded-full flex items-center gap-2 px-4 py-2 text-sm"
+                  onClick={nextAd}
+                >
+                  Next
+                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" strokeLinecap="round"><path d="M9 5l7 7-7 7" /></svg>
+                </button>
               </div>
             </div>
 
-            {/* Title card */}
-            <div className="glass-card rounded-xl px-5 py-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h1 className="text-xl font-bold text-stone-800 mb-1">Rulos, diddles, flams e drags</h1>
-                  <p className="text-xs text-stone-400">12.365 visualizações · 4 de ago. de 2021</p>
-                </div>
-                <StarRating rating={5} />
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-5 mt-3 pt-3 border-t border-amber-100/70">
-                {[
-                  { icon: <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16,6 12,2 8,6" /><line x1="12" y1="2" x2="12" y2="15" /></svg>, label: "Compartilhar aula" },
-                  { icon: <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>, label: "Adicionar à playlist" },
-                  { icon: <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12,6 12,12 16,14" /></svg>, label: "Assistir mais tarde" },
-                ].map(({ icon, label }) => (
-                  <button key={label} className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-600 transition-colors">
-                    {icon} {label}
-                  </button>
-                ))}
-                <div className="ml-auto">
-                  <button className="glass-btn-primary rounded-full px-4 py-1.5 text-sm font-semibold flex items-center gap-1.5">
-                    Próxima aula
-                    <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" strokeLinecap="round"><path d="M9 5l7 7-7 7" /></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Instructor row */}
-            <div className="glass-card rounded-xl px-5 py-4">
-              <div className="flex gap-8">
-                {[
-                  { label: "Professor:", name: "Taylor Hawkins", initials: "TH", grad: "linear-gradient(135deg,#d4a820,#b07010)" },
-                  { label: "Especialidade:", name: "Bateria / Guitarra", initials: "BG", grad: "linear-gradient(135deg,#80c050,#50962a)" },
-                  { label: "Cursos:", name: "32", initials: "32", grad: "linear-gradient(135deg,#e8b840,#c08820)" },
-                ].map(({ label, name, initials, grad }, i) => (
-                  <div key={i} className={`flex items-center gap-3 ${i > 0 ? "pl-8 border-l border-amber-100" : ""}`}>
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm" style={{ background: grad }}>
-                      {initials}
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-stone-400 font-semibold uppercase tracking-wider">{label}</p>
-                      <p className="text-sm font-semibold text-stone-700">{name}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <p className="mt-4 text-sm text-stone-500 leading-relaxed">
-                Nessa aula eu preparei um conteúdo muito fundamental para o seu desenvolvimento de coordenação motora nos
-                rudimentos, são eles os rulos, diddles, flams e drags. Esses rudimentos são movimentos básicos e necessários para que
-                consigamos desenvolver um bom som; nessa aula eu apresento as frases básicas do instrumento e{" "}
-                <button className="text-amber-700 font-medium hover:underline">Continuar lendo...</button>
-              </p>
-            </div>
-
-            {/* Tabs + content */}
+            {/* FORUM / COMMENTS */}
             <div className="glass-card rounded-xl overflow-hidden">
-              <div className="flex border-b border-amber-100/60">
-                {tabs.map((tab) => (
+              {/* Tabs */}
+              <div className="flex border-b border-amber-100/50">
+                {(["Discussion", "Forum", "Top Picks"] as const).map((tab) => (
                   <button
                     key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-3 text-sm transition-all ${activeTab === tab ? "tab-active" : "tab-inactive"}`}
+                    onClick={() => setForumTab(tab)}
+                    className={`px-4 py-3 text-sm transition-all ${forumTab === tab ? "forum-tab-active" : "forum-tab-inactive"}`}
                   >
                     {tab}
                   </button>
                 ))}
+                <div className="ml-auto flex items-center pr-4 gap-1.5">
+                  <span className="text-xs text-stone-400">{comments.length} replies</span>
+                </div>
               </div>
 
-              {activeTab === "Comentários" && (
-                <div className="p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm text-stone-500 font-medium">253 comentários</span>
-                    <button className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-600 transition-colors">
-                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
-                      Mais recentes
+              <div className="p-4">
+                {/* Comment input */}
+                <div className="flex gap-3 mb-5">
+                  <div className="c-avatar text-white flex-shrink-0" style={{ background: "linear-gradient(135deg,#d4a018,#8a6205)" }}>YO</div>
+                  <div className="flex-1 relative">
+                    <textarea
+                      className="glass-input w-full rounded-xl px-4 py-3 text-sm pr-10 resize-none"
+                      rows={2}
+                      placeholder={`Share your take on: ${question}`}
+                      value={commentInput}
+                      onChange={(e) => setCommentInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); postComment(); } }}
+                    />
+                    <button
+                      onClick={postComment}
+                      className="absolute right-3 bottom-3 text-amber-600 hover:text-amber-700 transition-colors"
+                    >
+                      <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22,2 15,22 11,13 2,9" />
+                      </svg>
                     </button>
                   </div>
+                </div>
 
-                  {/* Comment input */}
-                  <div className="flex gap-3 mb-6">
-                    <div className="comment-avatar text-white" style={{ background: "linear-gradient(135deg,#e8b840,#c08010)" }}>VC</div>
-                    <div className="flex-1 relative">
-                      <input
-                        className="glass-input rounded-xl w-full px-4 py-2.5 text-sm pr-10"
-                        placeholder="Faça um comentário público digitando aqui..."
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                      />
-                      <button className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500/60 hover:text-amber-600">
-                        <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22,2 15,22 11,13 2,9" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Comment list */}
-                  <div className="flex flex-col gap-5">
-                    {comments.map((c) => (
-                      <div key={c.id} className="flex gap-3">
-                        <div className="comment-avatar text-white" style={{ background: c.bg }}>{c.initials}</div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-semibold text-stone-700">{c.name}</span>
-                            <span className="text-xs text-stone-400">{c.time}</span>
-                          </div>
-                          <p className="text-sm text-stone-500 leading-relaxed">{c.text}</p>
-                          <div className="flex gap-4 mt-2">
-                            <button className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600">
-                              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z" /><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />
-                              </svg>
-                              {c.likes}
-                            </button>
-                            <button className="text-xs text-amber-700 font-semibold hover:underline">RESPONDER</button>
-                          </div>
+                {/* Comment list */}
+                <div className="flex flex-col gap-4">
+                  {comments.map((c) => (
+                    <div key={c.id} className="flex gap-3">
+                      <div className="c-avatar text-white" style={{ background: c.grad }}>{c.initials}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-sm font-bold text-stone-700">{c.user}</span>
+                          <span className={`badge ${config.badge}`}>{topic}</span>
+                          <span className="text-xs text-stone-400 ml-auto">{c.time}</span>
+                        </div>
+                        <p className="text-sm text-stone-600 leading-relaxed">{c.text}</p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <button
+                            className={`vote-btn ${voted[c.id] ? "upvoted" : ""}`}
+                            onClick={() => toggleVote(c.id)}
+                          >
+                            <svg width="11" height="11" fill={voted[c.id] ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z" />
+                              <path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />
+                            </svg>
+                            {c.votes + (voted[c.id] ? 1 : 0)}
+                          </button>
+                          <button className="text-xs text-amber-700 font-semibold hover:underline">Reply</button>
+                          <button className="text-xs text-stone-400 hover:text-stone-600">Share</button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-
-              {activeTab !== "Comentários" && (
-                <div className="p-8 text-center text-stone-400 text-sm">
-                  Conteúdo de {activeTab} aqui
-                </div>
-              )}
+              </div>
             </div>
+
           </div>
 
-          {/* ── RIGHT SIDEBAR ── */}
-          <div className="w-80 flex-shrink-0">
-            <div className="glass-sidebar rounded-xl p-4 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto scroll-custom">
-              <h2 className="text-base font-bold text-stone-800 mb-0.5">Bateria: Conceitos Básicos</h2>
-              <p className="text-xs text-stone-400 mb-3">Seu progresso</p>
-
-              {/* Progress */}
-              <div className="mb-5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-bold text-amber-800">22% completado</span>
-                  <span className="text-xs text-stone-400 flex items-center gap-1">
-                    <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="12,6 12,12 16,14" /></svg>
-                    6h13
-                  </span>
-                </div>
-                <div className="h-2 rounded-full w-full" style={{ background: "rgba(200,170,80,0.18)" }}>
-                  <div className="progress-bar-gold h-2" style={{ width: "22%" }} />
-                </div>
-              </div>
-
-              {/* Curriculum */}
-              <div className="flex flex-col gap-2">
-                {sections.map((section) => (
-                  <div key={section.id}>
-                    <button
-                      className="section-header w-full flex items-center justify-between text-left"
-                      onClick={() => toggleSection(section.id)}
-                    >
-                      <span className="text-sm font-semibold text-stone-700">{section.title}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-stone-400">{section.duration}</span>
-                        <svg
-                          width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
-                          className="transition-transform text-stone-400"
-                          style={{ transform: section.expanded ? "rotate(180deg)" : "rotate(0deg)" }}
-                        >
-                          <polyline points="6,9 12,15 18,9" />
-                        </svg>
-                      </div>
-                    </button>
-
-                    {section.expanded && (
-                      <div className="mt-1.5 flex flex-col gap-0.5">
-                        <p className="text-xs text-stone-400 px-1 py-1.5 leading-relaxed">
-                          {section.desc}{" "}
-                          <button className="text-amber-700 font-medium">Ver mais...</button>
-                        </p>
-                        {section.lessons.map((lesson) => (
-                          <div
-                            key={lesson.id}
-                            className={`glass-lesson-item px-3 py-2 flex items-center gap-2.5 cursor-pointer ${lesson.current ? "active" : ""}`}
-                          >
-                            <CheckIcon filled={lesson.completed} current={lesson.current} />
-                            <span className={`text-xs flex-1 ${lesson.current ? "font-semibold text-stone-800" : "text-stone-500"}`}>
-                              {lesson.title}
-                            </span>
-                            <span className="text-xs text-stone-400 flex-shrink-0">{lesson.duration}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+          {/* ─── RIGHT: LIVE CHAT SIDEBAR ─── */}
+          <div className="w-72 flex-shrink-0">
+            <div className="glass-sidebar rounded-xl sticky top-20 flex flex-col overflow-hidden" style={{ height: "calc(100vh - 6rem)" }}>
+              <LiveChat topic={topic} />
             </div>
           </div>
 
