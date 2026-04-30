@@ -15,6 +15,7 @@ export type Comment = {
   votes: number;
   upvotedBy: string[];
   createdAt: number;
+  parentId: string | null;
 };
 
 export function useComments(topic: Topic) {
@@ -23,7 +24,7 @@ export function useComments(topic: Topic) {
 
   useEffect(() => {
     const colRef = collection(db, "forums", topic.toLowerCase(), "comments");
-    const q = query(colRef, orderBy("createdAt", "desc"), limit(50));
+    const q = query(colRef, orderBy("createdAt", "desc"), limit(200));
     const unsub = onSnapshot(q, (snap) => {
       const items: Comment[] = snap.docs.map((d) => {
         const data = d.data();
@@ -35,6 +36,7 @@ export function useComments(topic: Topic) {
           votes: data.votes ?? 0,
           upvotedBy: data.upvotedBy ?? [],
           createdAt: data.createdAt?.toMillis?.() ?? Date.now(),
+          parentId: typeof data.parentId === "string" ? data.parentId : null,
         };
       });
       setComments(items);
@@ -44,7 +46,7 @@ export function useComments(topic: Topic) {
   }, [topic]);
 
   const postComment = useCallback(
-    async (text: string, username: string, uid: string) => {
+    async (text: string, username: string, uid: string, parentId: string | null = null) => {
       if (!text.trim()) return;
       const colRef = collection(db, "forums", topic.toLowerCase(), "comments");
       await addDoc(colRef, {
@@ -54,6 +56,7 @@ export function useComments(topic: Topic) {
         votes: 0,
         upvotedBy: [],
         createdAt: serverTimestamp(),
+        parentId: parentId ?? null,
       });
     },
     [topic]

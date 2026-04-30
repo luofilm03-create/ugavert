@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@/hooks/useChat";
 import { useUser } from "@/hooks/useUser";
+import { usePresence } from "@/hooks/usePresence";
 import type { Topic } from "@/lib/topics";
 
 const AVATAR_COLORS = [
@@ -35,6 +36,7 @@ interface LiveChatProps { topic: Topic; onClose?: () => void; }
 export default function LiveChat({ topic, onClose }: LiveChatProps) {
   const { messages, loading, sendMessage } = useChat(topic);
   const { user } = useUser();
+  const onlineCount = usePresence(topic, user.uid);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -61,7 +63,7 @@ export default function LiveChat({ topic, onClose }: LiveChatProps) {
           <span className="chat-title">Live Chat</span>
         </div>
         <div className="chat-header-right">
-          <span className="chat-online">{Math.max(messages.length, 1)} online</span>
+          <span className="chat-online">{onlineCount} online</span>
           {onClose && (
             <button className="chat-close" onClick={onClose}>
               <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

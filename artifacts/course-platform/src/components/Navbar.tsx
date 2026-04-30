@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { TOPICS, TOPIC_META, type Topic } from "@/lib/topics";
 import { useUser } from "@/hooks/useUser";
@@ -30,14 +30,95 @@ const TOPIC_ICONS: Record<Topic, React.ReactNode> = {
   ),
 };
 
+type SearchResult =
+  | { kind: "topic"; topic: Topic; label: string; sub: string }
+  | { kind: "subtag"; topic: Topic; label: string; sub: string }
+  | { kind: "question"; topic: Topic; label: string; sub: string };
+
+const ALL_RESULTS: SearchResult[] = TOPICS.flatMap((t) => {
+  const meta = TOPIC_META[t];
+  const topic: SearchResult = { kind: "topic", topic: t, label: t, sub: `Browse ${t} discussions` };
+  const subtags: SearchResult[] = meta.subtags.map((s) => ({
+    kind: "subtag", topic: t, label: s, sub: `${t} · tag`,
+  }));
+  const questions: SearchResult[] = meta.questions.map((q) => ({
+    kind: "question", topic: t, label: q, sub: `${t} · hot question`,
+  }));
+  return [topic, ...subtags, ...questions];
+});
+
+function scoreMatch(needle: string, hay: string): number {
+  if (!needle) return 0;
+  const n = needle.toLowerCase();
+  const h = hay.toLowerCase();
+  if (h === n) return 1000;
+  if (h.startsWith(n)) return 500;
+  const idx = h.indexOf(n);
+  if (idx !== -1) return 200 - idx;
+  // simple char-subsequence match
+  let i = 0;
+  for (const c of h) { if (c === n[i]) i++; if (i === n.length) return 50; }
+  return 0;
+}
+
 export default function Navbar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const { user, updateUsername } = useUser();
 
+  const [searchText, setSearchText] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+
   const activeTopic = TOPICS.find((t) => TOPIC_META[t].path === location) ?? "AI";
+
+  const results = useMemo(() => {
+    const q = searchText.trim();
+    if (!q) return [];
+    return ALL_RESULTS
+      .map((r) => ({ r, score: Math.max(scoreMatch(q, r.label), scoreMatch(q, r.sub) - 50) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((x) => x.r);
+  }, [searchText]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onClick);
+    return () => window.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const goToResult = (r: SearchResult) => {
+    setSearchOpen(false);
+    setSearchText("");
+    setLocation(TOPIC_META[r.topic].path);
+  };
+
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!searchOpen || results.length === 0) {
+      if (e.key === "Enter" && searchText.trim()) {
+        // No matches; try to land on a topic if user typed one of them
+        const direct = TOPICS.find((t) => t.toLowerCase() === searchText.trim().toLowerCase());
+        if (direct) { setLocation(TOPIC_META[direct].path); setSearchOpen(false); setSearchText(""); }
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIndex((i) => (i + 1) % results.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActiveIndex((i) => (i - 1 + results.length) % results.length); }
+    else if (e.key === "Enter") { e.preventDefault(); goToResult(results[activeIndex]); }
+    else if (e.key === "Escape") { setSearchOpen(false); }
+  };
+
+  useEffect(() => { setActiveIndex(0); }, [searchText]);
 
   const saveUsername = () => {
     if (nameInput.trim()) { updateUsername(nameInput.trim()); }
@@ -75,11 +156,48 @@ export default function Navbar() {
 
           {/* Right */}
           <div className="nav-right">
-            <div className="search-wrap">
-              <input className="glass-input nav-search" placeholder="Search topics..." />
+            <div className="search-wrap" ref={searchWrapRef}>
+              <input
+                className="glass-input nav-search"
+                placeholder="Search topics, tags, questions..."
+                value={searchText}
+                onChange={(e) => { setSearchText(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                onKeyDown={onSearchKeyDown}
+              />
               <svg className="search-icon" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
               </svg>
+
+              {searchOpen && results.length > 0 && (
+                <div className="search-dropdown">
+                  {results.map((r, i) => {
+                    const meta = TOPIC_META[r.topic];
+                    return (
+                      <button
+                        key={`${r.kind}-${r.topic}-${r.label}-${i}`}
+                        className={`search-result ${i === activeIndex ? "search-result-active" : ""}`}
+                        onMouseEnter={() => setActiveIndex(i)}
+                        onMouseDown={(e) => { e.preventDefault(); goToResult(r); }}
+                      >
+                        <span className="search-result-icon" style={{ color: meta.color, background: meta.color + "15" }}>
+                          {TOPIC_ICONS[r.topic]}
+                        </span>
+                        <span className="search-result-text">
+                          <span className="search-result-label">{r.label}</span>
+                          <span className="search-result-sub">{r.sub}</span>
+                        </span>
+                        <span className="search-result-kind">{r.kind}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {searchOpen && searchText.trim() && results.length === 0 && (
+                <div className="search-dropdown">
+                  <div className="search-empty">No matches for "{searchText}"</div>
+                </div>
+              )}
             </div>
 
             <button className="user-btn" onClick={() => { setShowEdit(true); setNameInput(user.username); }}>

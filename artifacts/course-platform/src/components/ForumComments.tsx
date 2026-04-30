@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useComments } from "@/hooks/useComments";
+import { useMemo, useState } from "react";
+import { useComments, type Comment } from "@/hooks/useComments";
 import { useUser } from "@/hooks/useUser";
 import { InArticleAd } from "@/components/AdUnit";
 import type { Topic } from "@/lib/topics";
@@ -36,6 +36,119 @@ interface Props { topic: Topic; question: string; }
 
 type Tab = "Discussion" | "Top Picks" | "Forum";
 
+interface CommentRowProps {
+  c: Comment;
+  topic: Topic;
+  meUid: string;
+  meUsername: string;
+  isReply?: boolean;
+  replies?: Comment[];
+  onVote: (id: string, hasVoted: boolean) => void;
+  onReply: (parentId: string, text: string) => Promise<void>;
+}
+
+function CommentRow({ c, topic, meUid, meUsername, isReply, replies, onVote, onReply }: CommentRowProps) {
+  const cfg = TOPIC_META[topic];
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [submittingReply, setSubmittingReply] = useState(false);
+  const hasVoted = c.upvotedBy.includes(meUid);
+
+  const submit = async () => {
+    if (!replyText.trim() || submittingReply) return;
+    setSubmittingReply(true);
+    try { await onReply(c.id, replyText.trim()); setReplyText(""); setReplyOpen(false); }
+    catch { /* ignore */ }
+    setSubmittingReply(false);
+  };
+
+  return (
+    <div className={`forum-comment ${isReply ? "forum-comment-reply" : ""}`}>
+      <div className="comment-avatar-wrap" style={{ background: avatarGrad(c.uid) }}>
+        {c.username.slice(0, 2).toUpperCase()}
+      </div>
+      <div className="comment-body">
+        <div className="comment-meta">
+          <span className="comment-user">{c.uid === meUid ? "You" : c.username}</span>
+          {!isReply && <span className={`badge ${cfg.badgeClass}`}>{topic}</span>}
+          <span className="comment-time">{timeAgo(c.createdAt)}</span>
+        </div>
+        <p className="comment-text">{c.text}</p>
+        <div className="comment-actions">
+          <button
+            className={`vote-btn ${hasVoted ? "upvoted" : ""}`}
+            onClick={() => onVote(c.id, hasVoted)}
+          >
+            <svg width="11" height="11" fill={hasVoted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+              <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+            </svg>
+            {c.votes}
+          </button>
+          <button className="reply-btn" onClick={() => setReplyOpen((v) => !v)}>
+            {replyOpen ? "Cancel" : `Reply${replies && replies.length ? ` · ${replies.length}` : ""}`}
+          </button>
+          <button
+            className="share-btn"
+            onClick={() => {
+              const url = `${window.location.origin}${window.location.pathname}#c-${c.id}`;
+              if (navigator.clipboard) void navigator.clipboard.writeText(url);
+            }}
+          >
+            <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16,6 12,2 8,6"/><line x1="12" y1="2" x2="12" y2="15"/>
+            </svg>
+            Share
+          </button>
+        </div>
+
+        {replyOpen && (
+          <div className="reply-compose">
+            <textarea
+              className="glass-input reply-input"
+              rows={2}
+              placeholder={`Reply to ${c.username}…`}
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submit(); } }}
+              maxLength={800}
+              disabled={submittingReply}
+              autoFocus
+            />
+            <div className="reply-compose-actions">
+              <span className="reply-compose-hint">Replying as {meUsername}</span>
+              <button
+                className="glass-btn-gold reply-submit"
+                onClick={submit}
+                disabled={submittingReply || !replyText.trim()}
+              >
+                {submittingReply ? "Posting…" : "Post reply"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {replies && replies.length > 0 && (
+          <div className="forum-reply-list">
+            {replies.map((r) => (
+              <CommentRow
+                key={r.id}
+                c={r}
+                topic={topic}
+                meUid={meUid}
+                meUsername={meUsername}
+                isReply
+                onVote={onVote}
+                onReply={onReply}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ForumComments({ topic, question }: Props) {
   const { comments, loading, postComment, toggleVote } = useComments(topic);
   const { user } = useUser();
@@ -47,13 +160,39 @@ export default function ForumComments({ topic, question }: Props) {
   const submit = async () => {
     if (!text.trim() || submitting) return;
     setSubmitting(true);
-    try { await postComment(text.trim(), user.username, user.uid); setText(""); } catch { /* ignore */ }
+    try { await postComment(text.trim(), user.username, user.uid, null); setText(""); } catch { /* ignore */ }
     setSubmitting(false);
   };
 
-  const sorted = tab === "Top Picks"
-    ? [...comments].sort((a, b) => b.votes - a.votes)
-    : [...comments].sort((a, b) => b.createdAt - a.createdAt);
+  const onReply = async (parentId: string, body: string) => {
+    await postComment(body, user.username, user.uid, parentId);
+  };
+
+  // Group replies under their parents for the Forum (threaded) view
+  const { topLevel, repliesByParent } = useMemo(() => {
+    const tops: Comment[] = [];
+    const map = new Map<string, Comment[]>();
+    for (const c of comments) {
+      if (c.parentId) {
+        const arr = map.get(c.parentId) ?? [];
+        arr.push(c); map.set(c.parentId, arr);
+      } else { tops.push(c); }
+    }
+    // Replies oldest first under each parent
+    for (const [k, v] of map) map.set(k, [...v].sort((a, b) => a.createdAt - b.createdAt));
+    return { topLevel: tops, repliesByParent: map };
+  }, [comments]);
+
+  const flatSorted: Comment[] = useMemo(() => {
+    if (tab === "Top Picks") return [...comments].sort((a, b) => b.votes - a.votes);
+    return [...comments].sort((a, b) => b.createdAt - a.createdAt);
+  }, [comments, tab]);
+
+  const threaded: Comment[] = useMemo(() => {
+    return [...topLevel].sort((a, b) => b.createdAt - a.createdAt);
+  }, [topLevel]);
+
+  const totalCount = comments.length;
 
   return (
     <div className="forum-wrap glass-card">
@@ -67,7 +206,7 @@ export default function ForumComments({ topic, question }: Props) {
             onClick={() => setTab(t)}
           >{t}</button>
         ))}
-        <span className="forum-count">{loading ? "…" : comments.length} replies</span>
+        <span className="forum-count">{loading ? "…" : totalCount} replies</span>
       </div>
 
       <div className="forum-body">
@@ -83,7 +222,7 @@ export default function ForumComments({ topic, question }: Props) {
               placeholder={`Share your take on: ${question}`}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submit(); } }}
               maxLength={800}
               disabled={submitting}
             />
@@ -106,7 +245,7 @@ export default function ForumComments({ topic, question }: Props) {
         {/* Comment list */}
         {loading && <div className="forum-loading">Loading discussion…</div>}
 
-        {!loading && sorted.length === 0 && (
+        {!loading && totalCount === 0 && (
           <div className="forum-empty">
             <svg width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="mb-2 opacity-40">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -115,46 +254,36 @@ export default function ForumComments({ topic, question }: Props) {
           </div>
         )}
 
-        {sorted.map((c, idx) => {
-          const hasVoted = c.upvotedBy.includes(user.uid);
-          return (
-            <div key={c.id}>
-              {idx > 0 && idx % 4 === 0 && <InArticleAd />}
-              <div className="forum-comment">
-                <div className="comment-avatar-wrap" style={{ background: avatarGrad(c.uid) }}>
-                  {c.username.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="comment-body">
-                  <div className="comment-meta">
-                    <span className="comment-user">{c.uid === user.uid ? "You" : c.username}</span>
-                    <span className={`badge ${cfg.badgeClass}`}>{topic}</span>
-                    <span className="comment-time">{timeAgo(c.createdAt)}</span>
-                  </div>
-                  <p className="comment-text">{c.text}</p>
-                  <div className="comment-actions">
-                    <button
-                      className={`vote-btn ${hasVoted ? "upvoted" : ""}`}
-                      onClick={() => toggleVote(c.id, user.uid, hasVoted)}
-                    >
-                      <svg width="11" height="11" fill={hasVoted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
-                        <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
-                      </svg>
-                      {c.votes}
-                    </button>
-                    <button className="reply-btn">Reply</button>
-                    <button className="share-btn">
-                      <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16,6 12,2 8,6"/><line x1="12" y1="2" x2="12" y2="15"/>
-                      </svg>
-                      Share
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {/* Discussion / Top Picks (flat) */}
+        {!loading && totalCount > 0 && tab !== "Forum" && flatSorted.map((c, idx) => (
+          <div key={c.id} id={`c-${c.id}`}>
+            {idx > 0 && idx % 4 === 0 && <InArticleAd />}
+            <CommentRow
+              c={c}
+              topic={topic}
+              meUid={user.uid}
+              meUsername={user.username}
+              onVote={(id, hasVoted) => void toggleVote(id, user.uid, hasVoted)}
+              onReply={onReply}
+            />
+          </div>
+        ))}
+
+        {/* Forum (threaded — parents only, with replies nested) */}
+        {!loading && totalCount > 0 && tab === "Forum" && threaded.map((c, idx) => (
+          <div key={c.id} id={`c-${c.id}`}>
+            {idx > 0 && idx % 4 === 0 && <InArticleAd />}
+            <CommentRow
+              c={c}
+              topic={topic}
+              meUid={user.uid}
+              meUsername={user.username}
+              replies={repliesByParent.get(c.id) ?? []}
+              onVote={(id, hasVoted) => void toggleVote(id, user.uid, hasVoted)}
+              onReply={onReply}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );

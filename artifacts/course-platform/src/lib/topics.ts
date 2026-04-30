@@ -75,12 +75,6 @@ export const TOPIC_META: Record<Topic, {
   },
 };
 
-export function getTopicQuestion(topic: Topic): string {
-  const questions = TOPIC_META[topic].questions;
-  const idx = Math.floor(Date.now() / (12 * 60 * 60 * 1000)) % questions.length;
-  return questions[idx];
-}
-
 export function pathToTopic(path: string): Topic {
   for (const t of TOPICS) {
     if (TOPIC_META[t].path === path) return t;

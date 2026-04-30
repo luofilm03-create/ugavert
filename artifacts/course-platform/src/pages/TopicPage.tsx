@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { TOPIC_META, getTopicQuestion, type Topic } from "@/lib/topics";
+import { TOPIC_META, type Topic } from "@/lib/topics";
+import { useHotQuestion } from "@/hooks/useHotQuestion";
 import { DisplayAd, LeaderboardAd } from "@/components/AdUnit";
 import ForumComments from "@/components/ForumComments";
 import LiveChat from "@/components/LiveChat";
@@ -10,13 +11,17 @@ interface Props { topic: Topic; }
 
 export default function TopicPage({ topic }: Props) {
   const cfg = TOPIC_META[topic];
-  const [question] = useState(() => getTopicQuestion(topic));
+  const { question, secondsRemaining, questionIndex } = useHotQuestion(topic);
   const [activeTag, setActiveTag] = useState<string>("");
   const [adIndex, setAdIndex] = useState(0);
   const [adProgress, setAdProgress] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [nextChange, setNextChange] = useState("");
+
+  const nextChange =
+    secondsRemaining >= 60
+      ? `${Math.floor(secondsRemaining / 60)}m ${secondsRemaining % 60}s`
+      : `${secondsRemaining}s`;
 
   // Ad auto-advance
   useEffect(() => {
@@ -35,20 +40,6 @@ export default function TopicPage({ topic }: Props) {
     }, 1000);
     return () => { timerRef.current && clearInterval(timerRef.current); };
   }, [adIndex, cfg.adLabels.length, topic]);
-
-  // Countdown to next question
-  useEffect(() => {
-    const tick = () => {
-      const msIn12h = 12 * 3600 * 1000;
-      const remaining = msIn12h - (Date.now() % msIn12h);
-      const h = Math.floor(remaining / 3600000);
-      const m = Math.floor((remaining % 3600000) / 60000);
-      setNextChange(`${h}h ${m}m`);
-    };
-    tick();
-    const t = setInterval(tick, 60000);
-    return () => clearInterval(t);
-  }, []);
 
   const prevAd = () => setAdIndex((i) => (i - 1 + cfg.adLabels.length) % cfg.adLabels.length);
   const nextAd = () => setAdIndex((i) => (i + 1) % cfg.adLabels.length);
@@ -90,7 +81,7 @@ export default function TopicPage({ topic }: Props) {
           <div className="main-col">
 
             {/* QUESTION BANNER */}
-            <div className="question-banner glass-question" key={`${topic}-${question}`}>
+            <div className="question-banner glass-question" key={`${topic}-${questionIndex}`}>
               <div className="question-icon" style={{ background: cfg.color + "22", color: cfg.color }}>
                 <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round">
                   <circle cx="12" cy="12" r="10"/>
